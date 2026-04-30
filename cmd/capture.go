@@ -179,7 +179,7 @@ func snapshotFile(s *store.ObjectStore, path string) store.CapturedFile {
 		return store.CapturedFile{
 			Path:       path,
 			Captured:   false,
-			SkipReason: fmt.Sprintf("too large (%d MB) — set UNDO_MAX_SIZE=200MB to capture larger files", info.Size()/1024/1024),
+			SkipReason: fmt.Sprintf("too large (%d MB) — raise limit with UNDO_MAX_SIZE=500MB, or =0 for no limit", info.Size()/1024/1024),
 		}
 	}
 	content, err := os.ReadFile(path)
