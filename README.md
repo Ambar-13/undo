@@ -1,53 +1,10 @@
 # undo
 
-**Filesystem undo for your terminal and scripts.** Capture `rm`, `mv`, and overwrites before they happen — and restore them with a single `undo`.
+Your terminal has no undo button. This is that button.
 
-Works with your shell, your scripts, and your AI agents (Claude Code, Cursor, Aider).
+`rm important.json`. Gone. Git doesn't know about it. The recycle bin definitely doesn't. There's no recovery path. You just lost the file.
 
-> **Already deleted something?** `undo` only works if it was running *before* the deletion. If it wasn't running yet — try `photorec`, `testdisk`, or (macOS) check Trash and Time Machine first.
-
----
-
-## When you actually need this
-
-**The `rm -rf` typo.**
-You meant `rm -rf ./dist`. You were one directory up. It happens to experienced developers. It takes one second and there is no recovery.
-
-**AI-written code that runs destructively.**
-You ask Claude to write a cleanup script. The script has a bug — it removes files matching the wrong pattern, calls `shutil.rmtree` on the wrong directory, opens existing files with `"w"` mode and wipes them. The AI wrote the code; it doesn't know what was inside those files. It can't undo what its own code did. `undo` intercepts those calls at the C library level before they complete.
-
-**Binary files the AI can never reconstruct.**
-Model weights, SQLite databases, compiled artifacts, images, PDFs. If an AI agent runs `rm model.pt` or a script deletes your local database, asking the AI to "undo it" gets you: *"I can't recreate that file."* `undo` had it.
-
-**Config files that aren't in git.**
-`.env`, `~/.ssh/config`, `database.yml`, credentials, dotfiles. These are gitignored or outside any repo. One wrong move from an AI agent or a cleanup script and they're gone with no recovery path.
-
-**Commands you ran, not the AI.**
-You typed `rm config.json`. The AI has no knowledge of it. Asking it to undo your terminal commands is asking it to hallucinate what was there.
-
-**Cross-session.**
-You come back the next day. The AI's context is gone. It has no memory of what it deleted or overwrote yesterday. `undo` has the journal and the bytes.
-
-**Scripts and deploy pipelines.**
-A deploy script runs `rm -rf dist/ && rm -rf .cache/` before rebuilding. The build fails halfway. Now you have nothing. The AI ran one bash command — it has no idea what was inside those directories.
-
-**Data files that aren't in git.**
-CSVs, JSON exports, logs, database dumps you were analyzing. A script runs `rm *.csv` on the wrong folder. The AI cannot reconstruct 500 MB of data it never saw.
-
----
-
-**Even when the AI could undo it.**
-An AI agent that's still in context *can* try to restore a file it just modified. But it rewrites from memory — possibly slightly different, possibly "improved," never guaranteed to be byte-for-byte identical. `undo` makes restore mean what `Ctrl+Z` means in an editor: instant, exact, no inference. One command, original bytes back, no conversation required.
-
-**When you don't need this:** if everything you care about is git-tracked source code, `git checkout` already covers you. This tool fills the gap git doesn't: configs, data, binaries, dotfiles, and anything destroyed by code you ran rather than code you wrote.
-
----
-
----
-
-## How it works
-
-A shell hook calls `undo capture` before every command. If the command is destructive (`rm`, `mv`, `>`, `truncate`, `shred`, `git clean`), undo snapshots the affected files into a content-addressed object store (`~/.undo/`) and appends a journal entry. When you run `undo`, it restores from the snapshot.
+`undo` fixes this. It hooks into your shell and silently snapshots files before they're destroyed. When something goes wrong, one command brings them back.
 
 ```
 $ rm important-config.json
@@ -57,7 +14,39 @@ $ undo
   ✓ restored  rm important-config.json
 ```
 
-History and object store are per-session. This is a **safety net**, not a backup.
+Works with your shell, your scripts, and your AI agents (Claude Code, Cursor, Aider).
+
+> **Already deleted something?** `undo` only works if it was running *before* the deletion. If it wasn't running yet, try `photorec`, `testdisk`, or check Trash and Time Machine first.
+
+---
+
+## When you actually need this
+
+**The classic typo.**
+`rm -rf ./dist` from one directory up. One second. No recovery. Happens to experienced developers.
+
+**The AI cleanup script with a bug.**
+You ask Claude to write a cleanup script. It removes files matching the wrong pattern. Calls `shutil.rmtree` on the wrong directory. Opens existing files with `"w"` mode and wipes them. The AI wrote the code. It doesn't know what was inside those files. It can't undo what its own code did. `undo` had the bytes before the script ran.
+
+**The file the AI can never reconstruct.**
+Model weights. SQLite databases. Compiled artifacts. Images. PDFs. If an AI agent runs `rm model.pt` or a script wipes your local database, asking it to undo gets you: *"I can't recreate that file."* `undo` had it.
+
+**The config that isn't in git.**
+`.env`. `~/.ssh/config`. `database.yml`. Credentials. Dotfiles. Gitignored or outside any repo entirely. One wrong move from a cleanup script and they're gone with nowhere to recover from.
+
+**The command you typed, not the AI.**
+You ran `rm config.json`. The AI has no knowledge of it. Asking it to undo your terminal commands is asking it to hallucinate what was there.
+
+**The next morning.**
+You come back. The AI's context is gone. It has no memory of what it deleted or overwrote yesterday. `undo` has the journal and the bytes.
+
+**The deploy script that failed halfway.**
+`rm -rf dist/ && rm -rf .cache/` before rebuild. Build fails. Now you have nothing. The AI ran one bash command. It has no idea what was inside those directories.
+
+**Even when the AI could undo it.**
+An AI agent still in context can try to restore a file it just modified. But it rewrites from memory. Possibly slightly different, possibly "improved," never byte-for-byte identical. `undo` makes restore mean what Ctrl+Z means in an editor: instant, exact, no inference. One command, original bytes back, no conversation required.
+
+**When you don't need this:** if everything you care about is git-tracked source code, `git checkout` already covers you. `undo` fills the gap git doesn't: configs, data, binaries, dotfiles, and anything destroyed by code you ran rather than code you wrote.
 
 ---
 
@@ -69,9 +58,9 @@ History and object store are per-session. This is a **safety net**, not a backup
 go version   # prints "go1.22.x ..." if installed; "command not found" if not
 ```
 
-If you don't have Go: install it from [go.dev/dl](https://go.dev/dl) — pick the macOS or Linux installer, it takes about 2 minutes. Then come back here.
+If you don't have Go, install it from [go.dev/dl](https://go.dev/dl). Pick the macOS or Linux installer. It takes about 2 minutes. Then come back here.
 
-### Step 1 — Install the binary
+### Step 1: Install the binary
 
 ```bash
 go install github.com/Ambar-13/undo@latest
@@ -96,7 +85,7 @@ sudo cp undo /usr/local/bin/
 
 </details>
 
-### Step 2 — Hook into your shell
+### Step 2: Hook into your shell
 
 Once `undo` is in your PATH, run this once:
 
@@ -108,7 +97,7 @@ undo install
 undo install --claude-code
 ```
 
-`undo install` wires `undo` into your shell so it activates automatically for every future command — you never have to think about it again. It adds a `source` line to your `~/.zshrc` (or `~/.bashrc`). Then restart your shell, or:
+`undo install` wires `undo` into your shell so it activates automatically for every future command. It adds a `source` line to your `~/.zshrc` (or `~/.bashrc`). Then restart your shell, or:
 
 ```bash
 source ~/.zshrc   # or ~/.bashrc
@@ -125,13 +114,13 @@ echo '[[ -f ~/.bash-preexec.sh ]] && source ~/.bash-preexec.sh' >> ~/.bashrc
 undo install
 ```
 
-### Step 3 — Verify it's active
+### Step 3: Verify it's active
 
 ```bash
 undo status
 ```
 
-> **Homebrew formula** is in progress — not available yet.
+> **Homebrew formula** is in progress. Not available yet.
 
 ---
 
@@ -172,7 +161,7 @@ undo purge --all
 
 `undo install` gives you two layers of coverage that compose:
 
-**Layer 1 — shell hook** (typed commands in your interactive shell):
+**Layer 1: shell hook** (typed commands in your interactive shell):
 
 | Command | Captured |
 |---|---|
@@ -183,13 +172,13 @@ undo purge --all
 | `truncate -s 0 log` | ✅ previous content |
 | `shred file` | ✅ file content |
 | `git clean -fd` | ✅ dry-run previews paths before deletion, captures each file |
-| Files > 50 MB | ⚠ skipped — raise the limit with `UNDO_MAX_SIZE=500MB`, or `=0` for no limit (see note below) |
+| Files > 50 MB | ⚠ skipped. Raise the limit with `UNDO_MAX_SIZE=500MB`, or `=0` for no limit (see note below) |
 
-> **UNDO_MAX_SIZE:** To set persistently, add `export UNDO_MAX_SIZE=500MB` to your `.zshrc` / `.bashrc`. Large limits mean large captures — a 2 GB model weight captured on every overwrite will fill disk quickly. Run `undo purge` periodically or set a reasonable limit for your use case.
+> **UNDO_MAX_SIZE:** To set persistently, add `export UNDO_MAX_SIZE=500MB` to your `.zshrc` / `.bashrc`. Large limits mean large captures. A 2 GB model weight captured on every overwrite will fill disk quickly. Run `undo purge` periodically or set a reasonable limit for your use case.
 
-**Layer 2 — deep intercept** (compiled C library, active after `undo install`):
+**Layer 2: deep intercept** (compiled C library, active after `undo install`):
 
-Intercepts `unlink`, `rename`, `truncate`, and `open(O_TRUNC)` using `LD_PRELOAD` (Linux) / `DYLD_INSERT_LIBRARIES` (macOS) — before any destructive call completes, regardless of what spawned the process.
+Intercepts `unlink`, `rename`, `truncate`, and `open(O_TRUNC)` using `LD_PRELOAD` (Linux) / `DYLD_INSERT_LIBRARIES` (macOS). Fires before any destructive call completes, regardless of what spawned the process.
 
 | Scenario | Captured |
 |---|---|
@@ -201,7 +190,7 @@ Intercepts `unlink`, `rename`, `truncate`, and `open(O_TRUNC)` using `LD_PRELOAD
 | Python `open("f", "w")` overwriting existing file | ✅ |
 | `/bin/rm` on macOS (SIP-protected binary) | ⚠ covered by shell hook for typed commands; not interceptable as subprocess on macOS |
 
-`⚠` means not captured — `undo` **tells you at capture time**, not at undo time.
+`⚠` means not captured. `undo` **tells you at capture time**, not at undo time.
 
 `undo status` shows which layers are active.
 
@@ -213,8 +202,8 @@ undo install --claude-code
 
 This does two things in `~/.claude/settings.json`:
 
-1. **PreToolUse hook** — fires before every Write/Edit/Bash tool call, capturing files before Claude Code touches them.
-2. **Deep intercept env** — injects the intercept library into every bash subprocess Claude Code spawns, regardless of how Claude Code was launched (Desktop app, VS Code, Spotlight — no shell inheritance needed).
+1. **PreToolUse hook:** fires before every Write/Edit/Bash tool call, capturing files before Claude Code touches them.
+2. **Deep intercept env:** injects the intercept library into every bash subprocess Claude Code spawns, regardless of how Claude Code was launched (Desktop app, VS Code, Spotlight).
 
 After this, Claude Code's entire process tree is covered: direct file operations, bash commands, subshells inside bash commands, make, Python subprocess calls, everything.
 
@@ -245,7 +234,7 @@ TIME     SOURCE  OP      COMMAND
 
 ## Design principles
 
-- **Warn at capture time, not undo time.** If a file can't be captured (too large, directory too deep), you see `⚠ not captured` immediately — not when it's too late.
+- **Warn at capture time, not undo time.** If a file can't be captured (too large, directory too deep), you see `⚠ not captured` immediately. Not when it's too late.
 - **Safety net, not backup.** History from previous sessions is not accessible from `undo` (it reads the current session's journal). Object data persists in `~/.undo/` until you delete it.
 - **Zero config.** One install command. No daemons, no background processes.
 - **Explicit cleanup.** Run `undo purge` to remove sessions older than 24 hours and any unreferenced objects. Use `undo purge --all` to wipe everything.
@@ -268,4 +257,4 @@ TIME     SOURCE  OP      COMMAND
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
