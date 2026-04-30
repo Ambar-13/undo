@@ -1,8 +1,10 @@
 # undo
 
-**Filesystem undo for your terminal.** Capture `rm`, `mv`, and overwrites before they happen — and restore them with a single `undo`.
+**Filesystem undo for your terminal and scripts.** Capture `rm`, `mv`, and overwrites before they happen — and restore them with a single `undo`.
 
 Works with your shell, your scripts, and your AI agents (Claude Code, Cursor, Aider).
+
+> **Already deleted something?** `undo` only works if it was running *before* the deletion. If it wasn't running yet — try `photorec`, `testdisk`, or (macOS) check Trash and Time Machine first.
 
 ---
 
@@ -61,13 +63,29 @@ History and object store are per-session. This is a **safety net**, not a backup
 
 ## Install
 
-### Homebrew (macOS/Linux) — coming soon
+**This tool requires Go.** Check if you have it:
 
 ```bash
-brew install undo   # formula in progress
+go version   # prints "go1.22.x ..." if installed; "command not found" if not
 ```
 
-### From source (requires Go 1.22+)
+If you don't have Go: install it from [go.dev/dl](https://go.dev/dl) — pick the macOS or Linux installer, it takes about 2 minutes. Then come back here.
+
+### Step 1 — Install the binary
+
+```bash
+go install github.com/Ambar-13/undo@latest
+```
+
+This downloads, compiles, and installs the `undo` binary to `~/go/bin/`. If `undo` isn't found after this, add Go's bin directory to your PATH:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc, then restart your shell:
+export PATH="$PATH:$HOME/go/bin"
+```
+
+<details>
+<summary>Build from source instead</summary>
 
 ```bash
 git clone https://github.com/Ambar-13/undo
@@ -76,21 +94,27 @@ go build -o undo .
 sudo cp undo /usr/local/bin/
 ```
 
-No separate shell file copy needed — shell scripts are embedded in the binary.
+</details>
 
-### Using `go install`
+### Step 2 — Hook into your shell
 
-```bash
-go install github.com/Ambar-13/undo@latest
-```
-
-### Hook into your shell
+Once `undo` is in your PATH, run this once:
 
 ```bash
+# Shell only (interactive terminal coverage)
 undo install
+
+# Shell + Claude Code (recommended if you use Claude Code)
+undo install --claude-code
 ```
 
-This extracts the shell integration to `~/.config/undo/shell/` and adds a `source` line to your rc file. Then restart your shell, or `source ~/.zshrc`.
+`undo install` wires `undo` into your shell so it activates automatically for every future command — you never have to think about it again. It adds a `source` line to your `~/.zshrc` (or `~/.bashrc`). Then restart your shell, or:
+
+```bash
+source ~/.zshrc   # or ~/.bashrc
+```
+
+`--claude-code` does everything above, plus wires up Claude Code hooks (see [Claude Code / Cursor / any AI agent](#claude-code--cursor--any-ai-agent) below).
 
 **Bash** (requires [bash-preexec](https://github.com/rcaloras/bash-preexec)):
 
@@ -101,11 +125,13 @@ echo '[[ -f ~/.bash-preexec.sh ]] && source ~/.bash-preexec.sh' >> ~/.bashrc
 undo install
 ```
 
-### Verify it's active
+### Step 3 — Verify it's active
 
 ```bash
 undo status
 ```
+
+> **Homebrew formula** is in progress — not available yet.
 
 ---
 
@@ -132,6 +158,12 @@ undo watch cleanup.py
 
 # Wrap a JavaScript/Node.js script
 undo watch script.js
+
+# Remove stored data older than 24 hours (run periodically to free disk)
+undo purge
+
+# Remove all stored data
+undo purge --all
 ```
 
 ---
@@ -151,11 +183,13 @@ undo watch script.js
 | `truncate -s 0 log` | ✅ previous content |
 | `shred file` | ✅ file content |
 | `git clean -fd` | ✅ dry-run previews paths before deletion, captures each file |
-| Files > 50 MB | ⚠ skipped — raise the limit with `UNDO_MAX_SIZE=500MB`, or `=0` for no limit |
+| Files > 50 MB | ⚠ skipped — raise the limit with `UNDO_MAX_SIZE=500MB`, or `=0` for no limit (see note below) |
+
+> **UNDO_MAX_SIZE:** To set persistently, add `export UNDO_MAX_SIZE=500MB` to your `.zshrc` / `.bashrc`. Large limits mean large captures — a 2 GB model weight captured on every overwrite will fill disk quickly. Run `undo purge` periodically or set a reasonable limit for your use case.
 
 **Layer 2 — deep intercept** (compiled C library, active after `undo install`):
 
-Intercepts `unlink`, `rename`, `truncate`, and `open(O_TRUNC)` at the libc level — before any destructive call completes, regardless of what spawned the process.
+Intercepts `unlink`, `rename`, `truncate`, and `open(O_TRUNC)` using `LD_PRELOAD` (Linux) / `DYLD_INSERT_LIBRARIES` (macOS) — before any destructive call completes, regardless of what spawned the process.
 
 | Scenario | Captured |
 |---|---|

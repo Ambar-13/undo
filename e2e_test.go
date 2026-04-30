@@ -11,7 +11,6 @@ func buildBinary(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "undo")
 	cmd := exec.Command("go", "build", "-o", bin, ".")
-	cmd.Dir = "/Users/ambar/untitled folder 2/undo"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
