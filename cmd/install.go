@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
+	"github.com/Ambar-13/undo/internal/intercept"
 	"github.com/Ambar-13/undo/internal/shellscripts"
 	"github.com/spf13/cobra"
 )
@@ -31,11 +34,12 @@ func runInstall(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("unsupported shell %q — manually source the appropriate integration file after running: undo install --print-script", shell)
 	}
 
-	// Extract embedded shell script to ~/.config/undo/shell/
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
+
+	// Extract embedded shell script to ~/.config/undo/shell/
 	shellDir := filepath.Join(home, ".config", "undo", "shell")
 	if err := os.MkdirAll(shellDir, 0755); err != nil {
 		return err
@@ -53,6 +57,16 @@ func runInstall(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// Compile the intercept library (best-effort — degrade gracefully if cc absent)
+	libPath, libErr := compileInterceptLib(home)
+	if libErr != nil {
+		fmt.Fprintf(os.Stderr, "  note: deep intercept unavailable (%v)\n", libErr)
+		fmt.Fprintf(os.Stderr, "        subshells and subprocess calls won't be captured\n")
+		fmt.Fprintf(os.Stderr, "        install a C compiler (cc) and re-run: undo install\n")
+	} else {
+		fmt.Printf("  Compiled intercept library → %s\n", libPath)
+	}
+
 	sourceLine := fmt.Sprintf("\n# undo — filesystem undo\nsource %q\n", scriptPath)
 
 	content, err := os.ReadFile(rcFile)
@@ -62,9 +76,8 @@ func runInstall(_ *cobra.Command, _ []string) error {
 	if strings.Contains(string(content), "undo") {
 		fmt.Printf("  undo is already configured in %s\n", rcFile)
 		fmt.Printf("  Shell script updated at %s\n", scriptPath)
-		// Still install Claude Code hook if requested, even when shell hook is already set up
 		if installClaudeCode {
-			if err := installClaudeCodeHook(); err != nil {
+			if err := installClaudeCodeHook(libPath); err != nil {
 				fmt.Fprintf(os.Stderr, "  warning: could not install Claude Code hook: %v\n", err)
 			}
 		}
@@ -91,14 +104,55 @@ func runInstall(_ *cobra.Command, _ []string) error {
 	}
 
 	if installClaudeCode {
-		if err := installClaudeCodeHook(); err != nil {
+		if err := installClaudeCodeHook(libPath); err != nil {
 			fmt.Fprintf(os.Stderr, "  warning: could not install Claude Code hook: %v\n", err)
 		}
 	}
 	return nil
 }
 
-func installClaudeCodeHook() error {
+// compileInterceptLib compiles the C intercept library into ~/.config/undo/lib/.
+// Returns the path to the compiled library, or an error if cc is unavailable.
+func compileInterceptLib(home string) (string, error) {
+	libDir := filepath.Join(home, ".config", "undo", "lib")
+	if err := os.MkdirAll(libDir, 0755); err != nil {
+		return "", err
+	}
+
+	// Write C source to a temp file
+	srcFile, err := os.CreateTemp("", "undo_intercept_*.c")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(srcFile.Name())
+
+	if _, err := srcFile.Write(intercept.Source); err != nil {
+		srcFile.Close()
+		return "", err
+	}
+	srcFile.Close()
+
+	// Output library path
+	var libName string
+	var compileArgs []string
+	if runtime.GOOS == "darwin" {
+		libName = "libundo_intercept.dylib"
+		compileArgs = []string{"-dynamiclib", "-o"}
+	} else {
+		libName = "libundo_intercept.so"
+		compileArgs = []string{"-shared", "-fPIC", "-ldl", "-o"}
+	}
+	libPath := filepath.Join(libDir, libName)
+	compileArgs = append(compileArgs, libPath, srcFile.Name())
+
+	out, err := exec.Command("cc", compileArgs...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("cc: %w — %s", err, strings.TrimSpace(string(out)))
+	}
+	return libPath, nil
+}
+
+func installClaudeCodeHook(libPath string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -123,7 +177,7 @@ func installClaudeCodeHook() error {
 		settings = make(map[string]interface{})
 	}
 
-	// Build the hook entry
+	// Add PreToolUse hook for Write/Edit/Bash operations
 	hookCommand := exe + " hook"
 	hookEntry := map[string]interface{}{
 		"matcher": "Write|Edit|MultiEdit|Bash",
@@ -135,41 +189,69 @@ func installClaudeCodeHook() error {
 		},
 	}
 
-	// Check if already installed
+	alreadyHooked := false
 	if hooks, ok := settings["hooks"].(map[string]interface{}); ok {
 		if preToolUse, ok := hooks["PreToolUse"].([]interface{}); ok {
 			for _, h := range preToolUse {
 				if hm, ok := h.(map[string]interface{}); ok {
 					if hm["matcher"] == "Write|Edit|MultiEdit|Bash" {
-						fmt.Println("  Claude Code hook already installed")
-						return nil
+						alreadyHooked = true
+						break
 					}
 				}
 			}
 		}
 	}
 
-	// Add or create hooks.PreToolUse
-	hooks, ok := settings["hooks"].(map[string]interface{})
-	if !ok {
-		hooks = make(map[string]interface{})
-		settings["hooks"] = hooks
+	if !alreadyHooked {
+		hooks, ok := settings["hooks"].(map[string]interface{})
+		if !ok {
+			hooks = make(map[string]interface{})
+			settings["hooks"] = hooks
+		}
+		preToolUse, _ := hooks["PreToolUse"].([]interface{})
+		hooks["PreToolUse"] = append(preToolUse, hookEntry)
+		fmt.Printf("  Installed Claude Code hook in %s\n", settingsPath)
+		fmt.Println("  Restart Claude Code (quit + reopen) for the hook to take effect.")
+	} else {
+		fmt.Println("  Claude Code hook already installed")
 	}
-	preToolUse, _ := hooks["PreToolUse"].([]interface{})
-	hooks["PreToolUse"] = append(preToolUse, hookEntry)
+
+	// Inject LD_PRELOAD / DYLD_INSERT_LIBRARIES into Claude Code's bash environment.
+	// This covers all Bash tool subshells within Claude Code, not just top-level commands.
+	if libPath != "" {
+		envKey := "LD_PRELOAD"
+		if runtime.GOOS == "darwin" {
+			envKey = "DYLD_INSERT_LIBRARIES"
+		}
+
+		envSection, ok := settings["env"].(map[string]interface{})
+		if !ok {
+			envSection = make(map[string]interface{})
+			settings["env"] = envSection
+		}
+
+		existing, _ := envSection[envKey].(string)
+		if !strings.Contains(existing, libPath) {
+			if existing != "" {
+				envSection[envKey] = libPath + ":" + existing
+			} else {
+				envSection[envKey] = libPath
+			}
+			fmt.Printf("  Set %s in Claude Code env → %s\n", envKey, libPath)
+		}
+
+		// Always export the undo binary path so the intercept lib can find it
+		if _, ok := envSection["UNDO_BIN"]; !ok {
+			envSection["UNDO_BIN"] = exe
+		}
+	}
 
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
-		return err
-	}
-
-	fmt.Printf("  Installed Claude Code hook in %s\n", settingsPath)
-	fmt.Println("  Claude Code will now capture Write/Edit/Bash operations automatically.")
-	fmt.Println("  Restart Claude Code (quit + reopen) for the hook to take effect.")
-	return nil
+	return os.WriteFile(settingsPath, data, 0644)
 }
 
 func shellScriptFor(shell string) []byte {

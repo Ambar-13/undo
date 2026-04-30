@@ -249,6 +249,76 @@ _pathlib.Path.write_bytes = _patched_write_bytes
 _pathlib.Path.unlink      = _patched_path_unlink
 _pathlib.Path.rename      = _patched_path_rename
 _pathlib.Path.replace     = _patched_path_replace
+
+# ── subprocess.* ───────────────────────────────────────────────────────────────
+# Captures files that would be destroyed by shell commands run from Python.
+# Only the list-form is analyzed (string-form is too risky to parse).
+
+_DESTRUCTIVE_CMDS = {
+    'rm': 'delete',  'remove': 'delete',  'del': 'delete',
+    'mv': 'move',    'move': 'move',
+    'cp': 'copy',    'copy': 'copy',
+    'truncate': 'truncate',
+    'shred': 'delete', 'wipe': 'delete',
+}
+
+def _analyze_subprocess_cmd(cmd):
+    try:
+        if not isinstance(cmd, (list, tuple)) or not cmd:
+            return
+        base = _os.path.basename(str(cmd[0]))
+        kind = _DESTRUCTIVE_CMDS.get(base)
+        if kind is None:
+            return
+        # Filter out flag arguments (start with -)
+        file_args = [str(a) for a in cmd[1:] if str(a) and not str(a).startswith('-')]
+        if kind == 'delete':
+            for p in file_args:
+                _capture(p)
+        elif kind == 'move':
+            for p in file_args:
+                _capture(p)
+        elif kind == 'copy':
+            # Capture destination only (last non-flag arg)
+            if file_args:
+                _capture(file_args[-1])
+        elif kind == 'truncate':
+            for p in file_args:
+                _capture(p)
+    except Exception:
+        pass
+
+_orig_sp_run          = _sp.run
+_orig_sp_call         = _sp.call
+_orig_sp_check_call   = _sp.check_call
+_orig_sp_check_output = _sp.check_output
+_orig_Popen_init      = _sp.Popen.__init__
+
+def _patched_sp_run(cmd, *a, **kw):
+    _analyze_subprocess_cmd(cmd)
+    return _orig_sp_run(cmd, *a, **kw)
+
+def _patched_sp_call(cmd, *a, **kw):
+    _analyze_subprocess_cmd(cmd)
+    return _orig_sp_call(cmd, *a, **kw)
+
+def _patched_sp_check_call(cmd, *a, **kw):
+    _analyze_subprocess_cmd(cmd)
+    return _orig_sp_check_call(cmd, *a, **kw)
+
+def _patched_sp_check_output(cmd, *a, **kw):
+    _analyze_subprocess_cmd(cmd)
+    return _orig_sp_check_output(cmd, *a, **kw)
+
+def _patched_Popen_init(self, cmd, *a, **kw):
+    _analyze_subprocess_cmd(cmd)
+    return _orig_Popen_init(self, cmd, *a, **kw)
+
+_sp.run           = _patched_sp_run
+_sp.call          = _patched_sp_call
+_sp.check_call    = _patched_sp_check_call
+_sp.check_output  = _patched_sp_check_output
+_sp.Popen.__init__ = _patched_Popen_init
 `, undoBin)
 	return dir, os.WriteFile(filepath.Join(dir, "sitecustomize.py"), []byte(shim), 0644)
 }
