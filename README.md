@@ -127,7 +127,7 @@ undo status
 # Wrap a shell script so rm/mv/overwrites inside it are captured
 undo watch deploy.sh
 
-# Wrap a Python script (captures os.unlink, os.remove, os.rename)
+# Wrap a Python script (captures file ops, shutil.*, subprocess.run, and more)
 undo watch cleanup.py
 
 # Wrap a JavaScript/Node.js script

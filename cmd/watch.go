@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -34,6 +35,11 @@ func runWatch(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Build environment with LD_PRELOAD/DYLD_INSERT_LIBRARIES injected so every
+	// child process inherits the intercept library — subshells, make, subprocess
+	// calls, C programs inside the script are all covered, not just top-level cmds.
+	base := deepInterceptEnv(exe)
+
 	var cmd *exec.Cmd
 	ext := strings.ToLower(filepath.Ext(script))
 
@@ -51,7 +57,7 @@ func runWatch(_ *cobra.Command, args []string) error {
 		}
 
 		cmd = exec.Command("python3", append([]string{script}, scriptArgs...)...)
-		cmd.Env = append(os.Environ(), "PYTHONPATH="+pythonPath)
+		cmd.Env = append(base, "PYTHONPATH="+pythonPath)
 
 	case ".js", ".mjs":
 		shimPath, err := writeNodeShim(exe)
@@ -60,11 +66,10 @@ func runWatch(_ *cobra.Command, args []string) error {
 		}
 		defer os.Remove(shimPath)
 		cmd = exec.Command("node", append([]string{"--require", shimPath, script}, scriptArgs...)...)
-		cmd.Env = append(os.Environ(), "UNDO_BIN="+exe)
+		cmd.Env = base
 
 	case ".sh", ".bash":
 		shellScript := filepath.Join(filepath.Dir(exe), "shell", "undo.bash")
-		// If shell script not found next to binary, use embedded hook inline
 		var hookLine string
 		if _, err := os.Stat(shellScript); err == nil {
 			hookLine = fmt.Sprintf(". %q && UNDO_QUIET=1", shellScript)
@@ -83,27 +88,59 @@ func runWatch(_ *cobra.Command, args []string) error {
 			fullCmd = fmt.Sprintf("%s bash %q %s", hookLine, script, strings.Join(quoted, " "))
 		}
 		cmd = exec.Command("bash", "-c", fullCmd)
+		cmd.Env = base
 
 	default:
-		// Support natural forms like "undo watch python3 script.py" or
-		// "undo watch node script.js" — reroute to the appropriate shim branch.
-		base := filepath.Base(script)
-		isPython := base == "python" || base == "python3" || base == "python2" ||
-			strings.HasPrefix(base, "python3.") || strings.HasPrefix(base, "python2.")
-		isNode := base == "node" || base == "nodejs"
+		scriptBase := filepath.Base(script)
+		isPython := scriptBase == "python" || scriptBase == "python3" || scriptBase == "python2" ||
+			strings.HasPrefix(scriptBase, "python3.") || strings.HasPrefix(scriptBase, "python2.")
+		isNode := scriptBase == "node" || scriptBase == "nodejs"
 		if (isPython || isNode) && len(scriptArgs) > 0 {
-			// Re-invoke with the actual script file as first arg so the
-			// extension-based switch above picks up the right shim.
 			return runWatch(nil, append([]string{scriptArgs[0]}, scriptArgs[1:]...))
 		}
-		// Try executing directly (for scripts with shebangs)
 		cmd = exec.Command(script, scriptArgs...)
+		cmd.Env = base
 	}
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// deepInterceptEnv returns os.Environ() with LD_PRELOAD (Linux) or
+// DYLD_INSERT_LIBRARIES (macOS) set to the compiled intercept library,
+// plus UNDO_BIN pointing at the current executable. Every child process
+// that inherits this environment gets libc-level capture coverage.
+// Returns plain os.Environ() if the library hasn't been compiled yet.
+func deepInterceptEnv(exe string) []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return os.Environ()
+	}
+
+	libName := "libundo_intercept.so"
+	envKey := "LD_PRELOAD"
+	if runtime.GOOS == "darwin" {
+		libName = "libundo_intercept.dylib"
+		envKey = "DYLD_INSERT_LIBRARIES"
+	}
+	libPath := filepath.Join(home, ".config", "undo", "lib", libName)
+	if _, err := os.Stat(libPath); err != nil {
+		return os.Environ()
+	}
+
+	src := os.Environ()
+	out := make([]string, 0, len(src)+2)
+	for _, e := range src {
+		if strings.HasPrefix(e, envKey+"=") || strings.HasPrefix(e, "UNDO_BIN=") {
+			continue
+		}
+		out = append(out, e)
+	}
+	out = append(out, envKey+"="+libPath)
+	out = append(out, "UNDO_BIN="+exe)
+	return out
 }
 
 func writePythonShim(undoBin string) (string, error) {
