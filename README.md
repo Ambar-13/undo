@@ -6,11 +6,37 @@ Works with your shell, your scripts, and your AI agents (Claude Code, Cursor, Ai
 
 ---
 
-## The problem
+## When you actually need this
 
-You run `rm -rf dist/` or an AI agent issues `mv config.json config.json.bak` and overwrites your work. Git doesn't track it. The recycle bin doesn't cover it. There's no undo.
+**The `rm -rf` typo.**
+You meant `rm -rf ./dist`. You were one directory up. It happens to experienced developers. It takes one second and there is no recovery.
 
-`undo` fills that gap.
+**AI-written code that runs destructively.**
+You ask Claude to write a cleanup script. The script has a bug — it removes files matching the wrong pattern, calls `shutil.rmtree` on the wrong directory, opens existing files with `"w"` mode and wipes them. The AI wrote the code; it doesn't know what was inside those files. It can't undo what its own code did. `undo` intercepts those calls at the C library level before they complete.
+
+**Binary files the AI can never reconstruct.**
+Model weights, SQLite databases, compiled artifacts, images, PDFs. If an AI agent runs `rm model.pt` or a script deletes your local database, asking the AI to "undo it" gets you: *"I can't recreate that file."* `undo` had it.
+
+**Config files that aren't in git.**
+`.env`, `~/.ssh/config`, `database.yml`, credentials, dotfiles. These are gitignored or outside any repo. One wrong move from an AI agent or a cleanup script and they're gone with no recovery path.
+
+**Commands you ran, not the AI.**
+You typed `rm config.json`. The AI has no knowledge of it. Asking it to undo your terminal commands is asking it to hallucinate what was there.
+
+**Cross-session.**
+You come back the next day. The AI's context is gone. It has no memory of what it deleted or overwrote yesterday. `undo` has the journal and the bytes.
+
+**Scripts and deploy pipelines.**
+A deploy script runs `rm -rf dist/ && rm -rf .cache/` before rebuilding. The build fails halfway. Now you have nothing. The AI ran one bash command — it has no idea what was inside those directories.
+
+**Data files that aren't in git.**
+CSVs, JSON exports, logs, database dumps you were analyzing. A script runs `rm *.csv` on the wrong folder. The AI cannot reconstruct 500 MB of data it never saw.
+
+---
+
+**When you don't need this:** if everything you care about is git-tracked source code, `git checkout` already covers you. This tool fills the gap git doesn't: configs, data, binaries, dotfiles, and anything destroyed by code you ran rather than code you wrote.
+
+---
 
 ---
 
