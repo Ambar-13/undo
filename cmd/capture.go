@@ -15,10 +15,35 @@ import (
 	"github.com/Ambar-13/undo/internal/store"
 )
 
-const (
-	storeRoot    = ".undo"
-	maxFileBytes = 50 * 1024 * 1024 // 50 MB per file
-)
+const storeRoot = ".undo"
+
+// effectiveMaxBytes returns the per-file size cap. Users can override the
+// default 50 MB by setting UNDO_MAX_SIZE (e.g. UNDO_MAX_SIZE=200MB or =0 for unlimited).
+func effectiveMaxBytes() int64 {
+	if v := os.Getenv("UNDO_MAX_SIZE"); v != "" {
+		if v == "0" || strings.EqualFold(v, "unlimited") {
+			return 0 // no cap
+		}
+		multiplier := int64(1024 * 1024) // default: MB
+		raw := v
+		switch {
+		case strings.HasSuffix(v, "GB") || strings.HasSuffix(v, "gb"):
+			multiplier = 1024 * 1024 * 1024
+			raw = v[:len(v)-2]
+		case strings.HasSuffix(v, "MB") || strings.HasSuffix(v, "mb"):
+			multiplier = 1024 * 1024
+			raw = v[:len(v)-2]
+		case strings.HasSuffix(v, "KB") || strings.HasSuffix(v, "kb"):
+			multiplier = 1024
+			raw = v[:len(v)-2]
+		}
+		var n int64
+		if _, err := fmt.Sscanf(raw, "%d", &n); err == nil && n > 0 {
+			return n * multiplier
+		}
+	}
+	return 50 * 1024 * 1024 // 50 MB default
+}
 
 var captureCmd = &cobra.Command{
 	Use:    "capture",
@@ -150,11 +175,11 @@ func snapshotFile(s *store.ObjectStore, path string) store.CapturedFile {
 	if err != nil {
 		return store.CapturedFile{Path: path, Captured: false, SkipReason: "not found"}
 	}
-	if info.Size() > maxFileBytes {
+	if max := effectiveMaxBytes(); max > 0 && info.Size() > max {
 		return store.CapturedFile{
 			Path:       path,
 			Captured:   false,
-			SkipReason: fmt.Sprintf("too large (%d MB)", info.Size()/1024/1024),
+			SkipReason: fmt.Sprintf("too large (%d MB) — set UNDO_MAX_SIZE=200MB to capture larger files", info.Size()/1024/1024),
 		}
 	}
 	content, err := os.ReadFile(path)

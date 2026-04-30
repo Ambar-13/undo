@@ -151,7 +151,7 @@ undo watch script.js
 | `truncate -s 0 log` | ✅ previous content |
 | `shred file` | ✅ file content |
 | `git clean -fd` | ✅ dry-run previews paths before deletion, captures each file |
-| Files > 50 MB | ⚠ skipped, reported at capture time |
+| Files > 50 MB | ⚠ skipped by default — set `UNDO_MAX_SIZE=200MB` (or `=0` for unlimited) |
 
 **Layer 2 — deep intercept** (compiled C library, active after `undo install`):
 
