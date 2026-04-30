@@ -150,7 +150,7 @@ undo watch script.js
 | `echo x > file` (redirect) | ✅ previous content |
 | `truncate -s 0 log` | ✅ previous content |
 | `shred file` | ✅ file content |
-| `git clean -fd` | ⚠ paths resolved at runtime — undo records the command, reports if files weren't pre-captured |
+| `git clean -fd` | ✅ dry-run previews paths before deletion, captures each file |
 | Files > 50 MB | ⚠ skipped, reported at capture time |
 
 **Layer 2 — deep intercept** (compiled C library, active after `undo install`):

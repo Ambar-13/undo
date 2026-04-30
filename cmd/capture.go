@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +37,11 @@ func runCapture(_ *cobra.Command, args []string) error {
 	op, paths := classifier.Classify(command)
 	if op == store.OpUnknown {
 		return nil
+	}
+
+	// git clean discovers paths dynamically — run a dry-run to find them before they're gone
+	if len(paths) == 0 && classifier.IsGitClean(command) {
+		paths = gitCleanPreview(command)
 	}
 
 	home, err := os.UserHomeDir()
@@ -207,6 +213,45 @@ func printIndicator(cf store.CapturedFile, source string, sessionCount int) {
 	}
 
 	fmt.Fprintf(os.Stderr, "  \033[2m· captured  %s  →  %s%s\033[0m\n", name, undoHint, agentTag)
+}
+
+// gitCleanPreview runs `git clean --dry-run` with the same flags as the real
+// command and returns the absolute paths of files that would be removed.
+// This lets us capture them before the actual deletion happens.
+func gitCleanPreview(command string) []string {
+	// Don't preview if it's already a dry-run (no actual deletion will happen)
+	if strings.Contains(command, "-n") || strings.Contains(command, "--dry-run") {
+		return nil
+	}
+
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return nil
+	}
+	// Append --dry-run to the original command arguments
+	dryArgs := append(parts[1:], "--dry-run")
+	out, err := exec.Command(parts[0], dryArgs...).Output()
+	if err != nil {
+		return nil
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil
+	}
+
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		// git clean --dry-run outputs: "Would remove path/to/file"
+		after, ok := strings.CutPrefix(strings.TrimSpace(line), "Would remove ")
+		if !ok || after == "" {
+			continue
+		}
+		// Strip trailing slash (directories are listed as "dir/")
+		rel := strings.TrimSuffix(after, "/")
+		paths = append(paths, filepath.Join(cwd, rel))
+	}
+	return paths
 }
 
 var _sessionID string

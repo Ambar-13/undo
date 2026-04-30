@@ -17,6 +17,11 @@ var (
 	reGitClean = regexp.MustCompile(`^git\s+clean\s+`)
 )
 
+// IsGitClean reports whether cmd is a git clean invocation.
+func IsGitClean(cmd string) bool {
+	return reGitClean.MatchString(strings.TrimSpace(cmd))
+}
+
 // Classify returns the operation type and affected source paths for a shell command.
 // For moves, only the source path is returned (destination is new location, not at risk).
 func Classify(cmd string) (store.OpType, []string) {
