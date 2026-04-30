@@ -34,6 +34,9 @@ CSVs, JSON exports, logs, database dumps you were analyzing. A script runs `rm *
 
 ---
 
+**Even when the AI could undo it.**
+An AI agent that's still in context *can* try to restore a file it just modified. But it rewrites from memory — possibly slightly different, possibly "improved," never guaranteed to be byte-for-byte identical. `undo` makes restore mean what `Ctrl+Z` means in an editor: instant, exact, no inference. One command, original bytes back, no conversation required.
+
 **When you don't need this:** if everything you care about is git-tracked source code, `git checkout` already covers you. This tool fills the gap git doesn't: configs, data, binaries, dotfiles, and anything destroyed by code you ran rather than code you wrote.
 
 ---
