@@ -1,0 +1,6 @@
+undo
+undofs
+*.test
+*.out
+.DS_Store
+dist/
