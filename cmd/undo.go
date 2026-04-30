@@ -28,7 +28,7 @@ func init() {
 func runUndo(_ *cobra.Command, args []string) error {
 	n := 1
 	if len(args) > 0 {
-		fmt.Sscanf(args[0], "%d", &n)
+		_, _ = fmt.Sscanf(args[0], "%d", &n)
 	}
 	if n < 1 {
 		n = 1

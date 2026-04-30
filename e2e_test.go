@@ -69,9 +69,11 @@ func TestE2EHistoryShowsEntry(t *testing.T) {
 	env := append(os.Environ(), "HOME="+home)
 
 	target := filepath.Join(home, "tracked.txt")
-	os.WriteFile(target, []byte("data"), 0644)
+	if err := os.WriteFile(target, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
-	runCmd(bin, env, "capture", "rm", target)
+	_, _ = runCmd(bin, env, "capture", "rm", target)
 
 	out, err := runCmd(bin, env, "history")
 	if err != nil {

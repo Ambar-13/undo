@@ -172,7 +172,7 @@ func installClaudeCodeHook(libPath string) error {
 	// Read existing settings or start fresh
 	var settings map[string]interface{}
 	if data, err := os.ReadFile(settingsPath); err == nil {
-		json.Unmarshal(data, &settings)
+		_ = json.Unmarshal(data, &settings)
 	}
 	if settings == nil {
 		settings = make(map[string]interface{})
