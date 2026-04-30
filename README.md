@@ -109,48 +109,51 @@ undo watch script.js
 
 ## What gets captured
 
-| Command | Op | Captured |
-|---|---|---|
-| `rm file` | delete | ✅ file content |
-| `rm -rf dir/` | delete | ✅ up to 1000 files |
-| `mv src dst` | move | ✅ source file |
-| `echo x > file` | overwrite | ✅ previous content |
-| `truncate -s 0 log` | overwrite | ✅ previous content |
-| `shred file` | delete | ✅ file content |
-| `git clean -fd` | delete | ⚠ paths not known — undo will report an error |
-| Files > 50 MB | any | ⚠ skipped (shown at capture time) |
-| Commands in subshells | any | ⚠ not captured (see below) |
-| Python `subprocess.run(["rm", ...])` | delete | ⚠ not captured (see below) |
+`undo install` gives you two layers of coverage that compose:
+
+**Layer 1 — shell hook** (typed commands in your interactive shell):
+
+| Command | Captured |
+|---|---|
+| `rm file` | ✅ file content |
+| `rm -rf dir/` | ✅ up to 1000 files |
+| `mv src dst` | ✅ source + destination |
+| `echo x > file` (redirect) | ✅ previous content |
+| `truncate -s 0 log` | ✅ previous content |
+| `shred file` | ✅ file content |
+| `git clean -fd` | ⚠ paths resolved at runtime — undo records the command, reports if files weren't pre-captured |
+| Files > 50 MB | ⚠ skipped, reported at capture time |
+
+**Layer 2 — deep intercept** (compiled C library, active after `undo install`):
+
+Intercepts `unlink`, `rename`, `truncate`, and `open(O_TRUNC)` at the libc level — before any destructive call completes, regardless of what spawned the process.
+
+| Scenario | Captured |
+|---|---|
+| Subshells: `(rm foo)`, `$(rm foo)` | ✅ |
+| Background jobs: `rm foo &` | ✅ |
+| `make clean` spawning `rm` | ✅ |
+| Python `subprocess.run(["rm", "file"])` | ✅ |
+| C/Rust/Go programs calling `unlink()` directly | ✅ |
+| Python `open("f", "w")` overwriting existing file | ✅ |
+| `/bin/rm` on macOS (SIP-protected binary) | ⚠ covered by shell hook for typed commands; not interceptable as subprocess on macOS |
 
 `⚠` means not captured — `undo` **tells you at capture time**, not at undo time.
 
-### Shell scope
+`undo status` shows which layers are active.
 
-The preexec hook only sees commands typed directly in your interactive shell. It does **not** capture:
-
-- Commands in subshells: `(rm foo)`, `$(rm foo)`, background jobs
-- Scripts that spawn sub-processes externally (e.g. a Makefile running `rm` via `make`)
-
-`undo watch script.sh` captures commands run at the top-level bash session wrapping the script, but not commands in sub-processes the script spawns.
-
-### Python scope
-
-`undo watch script.py` patches `os.unlink`, `os.remove`, and `os.rename`. It does **not** capture:
-
-- `subprocess.run(["rm", ...])` or any other subprocess calls
-- C extensions that call `unlink` directly
-
-If your Python script uses subprocess to delete files, wrap those calls with `os.remove()` instead.
-
-### Claude Code / Cursor integration
-
-For the deepest coverage — capturing every file Write, Edit, and Bash command Claude Code runs — install the tool-level hook:
+### Claude Code / Cursor / any AI agent
 
 ```bash
 undo install --claude-code
 ```
 
-This writes a `PreToolUse` hook into `~/.claude/settings.json`. From that point, **every file Claude Code writes, edits, or touches via bash is captured before the change happens** — including direct file writes that bypass the shell entirely.
+This does two things in `~/.claude/settings.json`:
+
+1. **PreToolUse hook** — fires before every Write/Edit/Bash tool call, capturing files before Claude Code touches them.
+2. **Deep intercept env** — injects the intercept library into every bash subprocess Claude Code spawns, regardless of how Claude Code was launched (Desktop app, VS Code, Spotlight — no shell inheritance needed).
+
+After this, Claude Code's entire process tree is covered: direct file operations, bash commands, subshells inside bash commands, make, Python subprocess calls, everything.
 
 Works with Claude Code. Cursor and other agents with hook APIs: contributions welcome.
 

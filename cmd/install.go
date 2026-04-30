@@ -65,6 +65,7 @@ func runInstall(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "        install a C compiler (cc) and re-run: undo install\n")
 	} else {
 		fmt.Printf("  Compiled intercept library → %s\n", libPath)
+		fmt.Println("  Deep intercept covers: subshells, make, subprocess calls, C programs.")
 	}
 
 	sourceLine := fmt.Sprintf("\n# undo — filesystem undo\nsource %q\n", scriptPath)
