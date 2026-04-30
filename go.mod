@@ -1,6 +1,6 @@
 module github.com/Ambar-13/undo
 
-go 1.26.2
+go 1.22
 
 require (
 	github.com/google/uuid v1.6.0
