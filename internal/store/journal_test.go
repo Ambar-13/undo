@@ -110,7 +110,7 @@ func TestJournalSkipsCorruptedLines(t *testing.T) {
 	j := store.NewJournal(dir, "sess-corrupt")
 
 	good := store.JournalEntry{ID: "good", Command: "rm good.txt"}
-	j.Append(good)
+	_ = j.Append(good)
 
 	// Manually inject a corrupted line
 	import_path := dir + "/sess-corrupt.journal"
@@ -118,7 +118,7 @@ func TestJournalSkipsCorruptedLines(t *testing.T) {
 	_, _ = f.WriteString("this is not valid json\n")
 	f.Close()
 
-	j.Append(store.JournalEntry{ID: "also-good", Command: "rm also-good.txt"})
+	_ = j.Append(store.JournalEntry{ID: "also-good", Command: "rm also-good.txt"})
 
 	entries, err := j.ReadAll()
 	if err != nil {
@@ -142,7 +142,7 @@ func TestJournalPreservesFileInfo(t *testing.T) {
 			{Path: "/tmp/skip.bin", Captured: false, SkipReason: "too large"},
 		},
 	}
-	j.Append(entry)
+	_ = j.Append(entry)
 
 	entries, _ := j.ReadAll()
 	if len(entries) != 1 {
@@ -163,8 +163,8 @@ func TestJournalPreservesFileInfo(t *testing.T) {
 func TestJournalReaderParseBytes(t *testing.T) {
 	dir := t.TempDir()
 	j := store.NewJournal(dir, "parse-test")
-	j.Append(store.JournalEntry{ID: "e1", Command: "rm a.txt"})
-	j.Append(store.JournalEntry{ID: "e2", Command: "rm b.txt"})
+	_ = j.Append(store.JournalEntry{ID: "e1", Command: "rm a.txt"})
+	_ = j.Append(store.JournalEntry{ID: "e2", Command: "rm b.txt"})
 
 	import_path := dir + "/parse-test.journal"
 	data, err := readFile(import_path)
