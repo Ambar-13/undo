@@ -66,8 +66,8 @@ func TestJournalLastN(t *testing.T) {
 func TestJournalLastNMoreThanTotal(t *testing.T) {
 	dir := t.TempDir()
 	j := store.NewJournal(dir, "sess-overflow")
-	j.Append(store.JournalEntry{ID: "e1", Command: "rm a"})
-	j.Append(store.JournalEntry{ID: "e2", Command: "rm b"})
+	_ = j.Append(store.JournalEntry{ID: "e1", Command: "rm a"})
+	_ = j.Append(store.JournalEntry{ID: "e2", Command: "rm b"})
 
 	entries, err := j.LastN(100)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestJournalLastNMoreThanTotal(t *testing.T) {
 func TestJournalLastNZero(t *testing.T) {
 	dir := t.TempDir()
 	j := store.NewJournal(dir, "sess-zero")
-	j.Append(store.JournalEntry{ID: "e1", Command: "rm x"})
+	_ = j.Append(store.JournalEntry{ID: "e1", Command: "rm x"})
 
 	entries, err := j.LastN(0)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestJournalSkipsCorruptedLines(t *testing.T) {
 	// Manually inject a corrupted line
 	import_path := dir + "/sess-corrupt.journal"
 	f, _ := openAppend(import_path)
-	f.WriteString("this is not valid json\n")
+	_, _ = f.WriteString("this is not valid json\n")
 	f.Close()
 
 	j.Append(store.JournalEntry{ID: "also-good", Command: "rm also-good.txt"})

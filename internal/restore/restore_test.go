@@ -133,7 +133,7 @@ func TestRestoreOverwritesExistingFile(t *testing.T) {
 
 	target := filepath.Join(t.TempDir(), "file.txt")
 	// Write something different first
-	os.WriteFile(target, []byte("modified by accident"), 0644)
+	_ = os.WriteFile(target, []byte("modified by accident"), 0644)
 
 	result := restore.Apply(entry(target, hash, 0644), obj)
 	if len(result.Errors) != 0 {
