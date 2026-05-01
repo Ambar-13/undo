@@ -74,7 +74,7 @@ func runInstall(_ *cobra.Command, _ []string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if strings.Contains(string(content), "undo") {
+	if strings.Contains(string(content), scriptPath) {
 		fmt.Printf("  undo is already configured in %s\n", rcFile)
 		fmt.Printf("  Shell script updated at %s\n", scriptPath)
 		if installClaudeCode {

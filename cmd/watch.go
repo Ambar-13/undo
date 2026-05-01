@@ -35,6 +35,11 @@ func runWatch(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
 	// Build environment with LD_PRELOAD/DYLD_INSERT_LIBRARIES injected so every
 	// child process inherits the intercept library — subshells, make, subprocess
 	// calls, C programs inside the script are all covered, not just top-level cmds.
@@ -69,7 +74,7 @@ func runWatch(_ *cobra.Command, args []string) error {
 		cmd.Env = base
 
 	case ".sh", ".bash":
-		shellScript := filepath.Join(filepath.Dir(exe), "shell", "undo.bash")
+		shellScript := filepath.Join(home, ".config", "undo", "shell", "undo.bash")
 		var hookLine string
 		if _, err := os.Stat(shellScript); err == nil {
 			hookLine = fmt.Sprintf(". %q && UNDO_QUIET=1", shellScript)
