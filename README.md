@@ -224,10 +224,9 @@ Works with Claude Code. Cursor and other agents with hook APIs: contributions we
 | *(none)* | `you` |
 
 ```
-TIME     SOURCE  OP      COMMAND
-----     ------  --      -------
-10:04PM  claude  delete  rm -rf node_modules/
-10:06PM  you     move    mv config.json config.bak
+TIME     BY      ACTION   COMMAND
+10:04PM  ·claude·  removed  rm -rf node_modules/
+10:06PM  you       moved    mv config.json config.bak
 ```
 
 ---

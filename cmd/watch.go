@@ -132,13 +132,22 @@ func deepInterceptEnv(exe string) []string {
 
 	src := os.Environ()
 	out := make([]string, 0, len(src)+2)
+	existingPreload := ""
 	for _, e := range src {
-		if strings.HasPrefix(e, envKey+"=") || strings.HasPrefix(e, "UNDO_BIN=") {
+		if strings.HasPrefix(e, envKey+"=") {
+			existingPreload = strings.TrimPrefix(e, envKey+"=")
+			continue
+		}
+		if strings.HasPrefix(e, "UNDO_BIN=") {
 			continue
 		}
 		out = append(out, e)
 	}
-	out = append(out, envKey+"="+libPath)
+	newPreload := libPath
+	if existingPreload != "" {
+		newPreload = libPath + ":" + existingPreload
+	}
+	out = append(out, envKey+"="+newPreload)
 	out = append(out, "UNDO_BIN="+exe)
 	return out
 }
